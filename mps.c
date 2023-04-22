@@ -8,10 +8,24 @@
 #include <ctype.h>
 #include <time.h>
 #include <sys/time.h>
+#include <stdbool.h>
+#include <sys/syscall.h>
+#include <math.h>
 
 #define MAXTHREADS  10		// max number of threads
 
 pthread_mutex_t lock;
+
+struct burst_item {
+   int pid;
+   int burstLength;
+   int arrivalTime;
+   int remainingTime;
+   int finishTime;
+   int turnaroundTime;
+   int waitingTime;
+   int processorId;
+};
 
 struct node {
    struct burst_item data;
@@ -26,69 +40,48 @@ int *headsLengths;
 pthread_t tids[MAXTHREADS];	// thread ids
 int startTime;
 struct timeval current_time;
+int sizeArgv;
 
-
-struct burst_item {
-   int pid;
-   int burstLength;
-   int arrivalTime;
-   int remainingTime;
-   int finishTime;
-   int turnaroundTime;
-   int waitingTime;
-   int processorId;
-};
+void insert(struct node* head, struct burst_item* newItem);
+void deleteNode(struct node* head, struct node* del);
 
 // this is the function to be executed by all the threads concurrently
 static void *do_task(void *arg_ptr)
 {
-    int N = 2;
-    char SAP = "M";
+    char SAP = 'M';
     char QS[] = "RM";
     char ALG[] = "RR";
     int Q = 20;
-    char INFILE = "in.txt";
+    char INFILE[] = "in.txt";
     int OUTMODE = 1;
     char OUTFILE[] = "out.txt";
-    int r[] = {200, 10, 1000, 100, 10, 500}; 
 
-    char *argv = (char *)arg_ptr;   
-    int argc = sizeof(argv) / sizeof(argv[0]);
+    char **argv = (char **)arg_ptr;   
 
-    for (int i = 0; i < argc; i++) {
-        if (argv[i] == "-n"){
+    for (int i = 0; i < sizeArgv; i++) {
+        if (strcmp(argv[i], "-a") == 0){
             i++;
-            N = argv[i];
-        }
-        else if (argv[i] == "-a"){
-            i++;
-            SAP = argv[i];
+            SAP = argv[i][0];
             i++;
             strcpy(QS, argv[i]);  
         }
-        else if (argv[i] == "-s"){
+        else if (strcmp(argv[i], "-s") == 0){
             i++;
             strcpy(ALG, argv[i]);
             i++;
-            strcpy(Q, argv[i]);
+            Q = atoi(argv[i]);
         }
-        else if (argv[i] == "-i"){
+        else if (strcmp(argv[i], "-i") == 0){
             i++;
             strcpy(INFILE, argv[i]);
         }
-        else if (argv[i] == "-m"){
+        else if (strcmp(argv[i], "-m") == 0){
             i++;
-            strcpy(OUTMODE, argv[i]);
+            OUTMODE = atoi(argv[i]);
         }
-        else if (argv[i] == "-o"){
+        else if (strcmp(argv[i], "-o") == 0){
             i++;
             strcpy(OUTFILE, argv[i]);
-        }
-        else if (argv[i] == "-r"){
-            for(int j = 0; j = 6; j++){
-                i++;
-                r[j] = argv[i];
-            }
         }
     }
     if (strcmp(ALG, "RR") != 0) {
@@ -96,14 +89,13 @@ static void *do_task(void *arg_ptr)
     }
 
     int queueId;
-    pid_t tid = gettid();
+    pid_t tid = syscall(__NR_gettid);
 
     while( heads[tid]->data.pid != -1){
         pthread_mutex_lock(&lock);
         // critical section
         
-
-        if (strcmp(SAP, "S") == 0){
+        if (SAP == 'S'){
             queueId = 0;
         }
         else {
@@ -121,12 +113,19 @@ static void *do_task(void *arg_ptr)
             if (OUTMODE == 2) {
                 gettimeofday(&current_time, NULL);
                 int currentTime = current_time.tv_usec - startTime;
-                printf("time= %s, cpu= %s, pid= %s, burstlen= %s, remainintime = %s\n", (current_time, tid, burst->pid, burst->burstLength, burst->remainingTime));
+                printf("time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
             }
 
             sleep(burst->burstLength);
+            
+            gettimeofday(&current_time, NULL);
+            int currentTime = current_time.tv_usec;
 
-            insert(list, heads[queueId]);
+            burst->finishTime = currentTime - startTime;
+            burst->turnaroundTime = burst->finishTime - burst->arrivalTime;
+            burst->waitingTime = burst->turnaroundTime - burst->burstLength;
+
+            insert(list, burst);
             deleteNode(heads[queueId], heads[queueId]);
         }
         else if(strcmp(ALG, "SJF") == 0){
@@ -157,12 +156,19 @@ static void *do_task(void *arg_ptr)
             if (OUTMODE == 2) {
                 gettimeofday(&current_time, NULL);
                 int currentTime = current_time.tv_usec - startTime;
-                printf("time= %s, cpu= %s, pid= %s, burstlen= %s, remainintime = %s\n", (current_time, tid, burst->pid, burst->burstLength, burst->remainingTime));
+                printf("time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
             }
 
             sleep(burst->burstLength);
 
-            insert(list, curNode);
+            gettimeofday(&current_time, NULL);
+            int currentTime = current_time.tv_usec;
+
+            burst->finishTime = currentTime - startTime;
+            burst->turnaroundTime = burst->finishTime - burst->arrivalTime;
+            burst->waitingTime = burst->turnaroundTime - burst->burstLength;
+
+            insert(list, burst);
             deleteNode(heads[queueId], curNode);
         }
         else if(strcmp(ALG, "RR") == 0){
@@ -171,22 +177,27 @@ static void *do_task(void *arg_ptr)
             if (OUTMODE == 2) {
                 gettimeofday(&current_time, NULL);
                 int currentTime = current_time.tv_usec - startTime;
-                printf("time= %s, cpu= %s, pid= %s, burstlen= %s, remainintime = %s\n", (current_time, tid, burst->pid, burst->burstLength, burst->remainingTime));
+                printf("time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
             }
 
-            if (burst->remainingTime > Q){
-                struct node *nodeRR = heads[queueId];
-                
+            if (burst->remainingTime > Q){                
                 sleep(Q);
 
                 burst->remainingTime = burst->remainingTime - Q;
                 deleteNode(heads[queueId], heads[queueId]);
-                insert(heads[queueId], nodeRR);
+                insert(heads[queueId], burst);
             }
             else {
                 sleep(burst->remainingTime);
 
-                insert(list, heads[queueId]);
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec;
+
+                burst->finishTime = currentTime - startTime;
+                burst->turnaroundTime = burst->finishTime - burst->arrivalTime;
+                burst->waitingTime = burst->turnaroundTime - burst->burstLength;
+
+                insert(list, burst);
                 deleteNode(heads[queueId], heads[queueId]);
             }
         }
@@ -208,17 +219,20 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    sizeArgv = argc;
+
     int N = 2;
-    char SAP = "M";
+    char SAP = 'M';
     char QS[] = "RM";
     char ALG[] = "RR";
     int Q = 20;
-    char INFILE = "in.txt";
-    int OUTMODE = 1;
+    char INFILE[] = "in.txt";
     char OUTFILE[] = "out.txt";
-    int r[] = {200, 10, 1000, 100, 10, 500};
+    int randS[] = {200, 10, 1000, 100, 10, 500};
+    
+    bool infileMode = false;
 
-    if (strcmp(SAP, "M") == 0){
+    if (SAP =='M'){
         heads = (struct node **)malloc(N * sizeof(struct node *));
         for (int i = 0; i < N; i++){
             heads[i] = NULL;
@@ -230,7 +244,7 @@ int main(int argc, char *argv[])
     }
     list = NULL;
 
-    headsLengths = (int**)malloc(N * sizeof(int));
+    headsLengths = (int*)malloc(N * sizeof(int));
     for (int i = 0; i < N; i++){
         headsLengths[i] = 0;
     }
@@ -245,39 +259,36 @@ int main(int argc, char *argv[])
     int countRR = 0;
 
     for (int i = 0; i < argc; i++) {
-        if (argv[i] == "-n"){
+        if (strcmp(argv[i], "-n") == 0){
             i++;
-            N = argv[i];
+            N = atoi(argv[i]);
         }
-        else if (argv[i] == "-a"){
+        else if (strcmp(argv[i], "-a") == 0){
             i++;
-            SAP = argv[i];
+            SAP = argv[i][0];
             i++;
             strcpy(QS, argv[i]);  
         }
-        else if (argv[i] == "-s"){
+        else if (strcmp(argv[i], "-s") == 0){
             i++;
             strcpy(ALG, argv[i]);
             i++;
-            strcpy(Q, argv[i]);
+            Q = atoi(argv[i]);
         }
-        else if (argv[i] == "-i"){
+        else if (strcmp(argv[i], "-i") == 0){
             i++;
             strcpy(INFILE, argv[i]);
         }
-        else if (argv[i] == "-m"){
-            i++;
-            strcpy(OUTMODE, argv[i]);
-        }
-        else if (argv[i] == "-o"){
+        else if (strcmp(argv[i], "-o") == 0){
             i++;
             strcpy(OUTFILE, argv[i]);
         }
-        else if (argv[i] == "-r"){
-            for(int j = 0; j = 6; j++){
+        else if (strcmp(argv[i], "-r") == 0){
+            for(int j = 0; j < 6; j++){
                 i++;
-                r[j] = argv[i];
+                randS[j] = atoi(argv[i]);
             }
+            infileMode = false;
         }
     }
 
@@ -285,73 +296,135 @@ int main(int argc, char *argv[])
         Q = 0;
     }
 
-	ptr = fopen(INFILE, "r");
-    int k = 0;
-    char *textPL = "";
-    char *textIAT = "";
-    do {
-		ch = fgetc(ptr);
+    for (int i = 0; i < N; ++i) {
+		ret = pthread_create(&(tids[i]), NULL, do_task, (void *) argv);
+       
+        if (ret != 0) {
+			exit(1);
+		}
+    }
 
-        *textPL = "";
-        *textIAT = "";
-		if (ch == 'P'){
-			k = 0;
-    		ch = fgetc(ptr);
-            do {
-		        ch = fgetc(ptr);
-                textPL[k] = ch;
-                k++;
-            } while (ch != EOF || ch != "\n");
-            struct burst_item *burst;
-            burst->pid = countPid;
-            countPid++;
-            burst->burstLength = atoi(textPL);
-            burst->remainingTime = atoi(textPL);
-           
-            gettimeofday(&current_time, NULL);
-            currentTime = current_time.tv_usec;
-           
-            burst->arrivalTime = (currentTime - startTime);
-            if (strcmp(SAP, "S") == 0){
-                burst->processorId = 1;
-                insert(heads[0], burst);
-                headsLengths[0] = headsLengths[0] + 1;
-            }
-            else {
-                if (strcmp(QS, "RM")){
-                    burst->processorId = (countRR % N) + 1;
-                    insert(heads[countRR % N], burst);
-                    countRR++;
+    if(infileMode){
+        ptr = fopen(INFILE, "r");
+        int k = 0;
+        char *textPL = "";
+        char *textIAT = "";
+        do {
+            ch = fgetc(ptr);
+
+            textPL = "";
+            textIAT = "";
+            if (ch == 'P'){
+                k = 0;
+                ch = fgetc(ptr);
+                do {
+                    ch = fgetc(ptr);
+                    textPL[k] = ch;
+                    k++;
+                } while (ch != EOF || ch != '\n');
+                struct burst_item *burst;
+                burst->pid = countPid;
+                countPid++;
+                burst->burstLength = atoi(textPL);
+                burst->remainingTime = atoi(textPL);
+            
+                gettimeofday(&current_time, NULL);
+                currentTime = current_time.tv_usec;
+            
+                burst->arrivalTime = (currentTime - startTime);
+                if (SAP == 'S'){
+                    burst->processorId = 1;
+                    insert(heads[0], burst);
+                    headsLengths[0] = headsLengths[0] + 1;
                 }
                 else {
-                    int minIndex = 0;
-                    for(int x = 0; x < N; x++){
-                        if(headsLengths[x] < headsLengths[minIndex])
-                            minIndex = x;
+                    if (strcmp(QS, "RM")){
+                        burst->processorId = (countRR % N) + 1;
+                        insert(heads[countRR % N], burst);
+                        countRR++;
                     }
-                    burst->processorId = minIndex + 1;
-                    
-                    insert(heads[minIndex], burst);
-                    headsLengths[minIndex] = headsLengths[minIndex] + 1;
+                    else {
+                        int minIndex = 0;
+                        for(int x = 0; x < N; x++){
+                            if(headsLengths[x] < headsLengths[minIndex])
+                                minIndex = x;
+                        }
+                        burst->processorId = minIndex + 1;
+                        
+                        insert(heads[minIndex], burst);
+                        headsLengths[minIndex] = headsLengths[minIndex] + 1;
+                    }
                 }
             }
-		}
-        else if (ch == "A"){
-            k = 0;
-    		ch = fgetc(ptr);
-    		ch = fgetc(ptr);
-            do {
-		        ch = fgetc(ptr);
-                textIAT[k] = ch;
-                k++;
-            } while (ch != EOF || ch != "\n");
-            sleep(atoi(textIAT));
+            else if (ch == 'A'){
+                k = 0;
+                ch = fgetc(ptr);
+                ch = fgetc(ptr);
+                do {
+                    ch = fgetc(ptr);
+                    textIAT[k] = ch;
+                    k++;
+                } while (ch != EOF || ch != '\n');
+                sleep(atoi(textIAT));
+            }
+        } while (ch != EOF);
+    }
+    else{
+        int count = 0;
+
+        while(count < 6){
+            double lambdaT = 1 / randS[0];
+            double uT = ((double)rand()) / RAND_MAX;
+            double xT = ((-1) * log(1 - uT)) / lambdaT;
+
+            double lambdaL = 1 / randS[3];
+            double uL = ((double)rand()) / RAND_MAX;
+            double xL = ((-1) * log(1 - uL)) / lambdaL;
+
+            if (xT > randS[1] && xT < randS[2] && xL > randS[4] && xL < randS[5])
+            {
+                struct burst_item *burst;
+                burst->pid = countPid;
+                countPid++;
+
+                burst->burstLength = xL;
+                burst->remainingTime = xL;
+
+                gettimeofday(&current_time, NULL);
+                currentTime = current_time.tv_usec;
+
+                burst->arrivalTime = currentTime - startTime;
+
+                if (SAP == 'S'){
+                    burst->processorId = 1;
+                    insert(heads[0], burst);
+                    headsLengths[0] = headsLengths[0] + 1;
+                }
+                else {
+                    if (strcmp(QS, "RM")){
+                        burst->processorId = (countRR % N) + 1;
+                        insert(heads[countRR % N], burst);
+                        countRR++;
+                    }
+                    else {
+                        int minIndex = 0;
+                        for(int x = 0; x < N; x++){
+                            if(headsLengths[x] < headsLengths[minIndex])
+                                minIndex = x;
+                        }
+                        burst->processorId = minIndex + 1;
+                        
+                        insert(heads[minIndex], burst);
+                        headsLengths[minIndex] = headsLengths[minIndex] + 1;
+                    }
+                }
+                sleep(xT);
+            }
+            
         }
-	} while (ch != EOF);
-
+    }
     
-
-    if (strcmp(SAP, "S") == 0){
+    if (SAP == 'S'){
         struct node *dummyItem = (struct node*) malloc(sizeof(struct node));
         (&dummyItem->data)->pid = -1;
         struct node *currentNode;
@@ -381,14 +454,6 @@ int main(int argc, char *argv[])
             dummyItem->prev = currentNode->prev;
             dummyItem->next = currentNode->next;
         }
-    }
-
-	for (int i = 0; i < N; ++i) {
-		ret = pthread_create(&(tids[i]), NULL, do_task, (void *) argv);
-       
-        if (ret != 0) {
-			exit(1);
-		}
     }
 
     for (int i = 0; i < N; ++i) {
@@ -426,7 +491,7 @@ int main(int argc, char *argv[])
         }
         burst = curNode->data;
 
-        printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n", (burst.pid, burst.processorId, burst.burstLength, burst.arrivalTime, burst.finishTime, burst.waitingTime, burst.turnaroundTime));
+        printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\n", burst.pid, burst.processorId, burst.burstLength, burst.arrivalTime, burst.finishTime, burst.waitingTime, burst.turnaroundTime);
         deleteNode(list,curNode);
     }
 
