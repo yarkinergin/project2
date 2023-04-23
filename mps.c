@@ -47,21 +47,20 @@ struct timeval current_time;
 int sizeArgv;
 
 void insert(struct node**, struct burst_item*);
-void deleteNode(struct node*, struct node*);
+void deleteNode(struct node**, struct node*);
 
 // this is the function to be executed by all the threads concurrently
 static void *do_task(void *arg_ptr)
 {
     printf("*************************\n");
-    /*
 
     char SAP = 'M';
-    char QS[] = "RM";
-    char ALG[] = "RR";
+    char QS[2] = "RM";
+    char ALGT[5] = "RR";
     int Q = 20;
-    char INFILE[] = "in.txt";
+    char INFILE[10] = "in.txt";
     int OUTMODE = 1;
-    char OUTFILE[] = "out.txt";
+    char OUTFILE[10] = "out.txt";
     int queueId;
 
     char **argv = ((struct arg *) arg_ptr)->argv;
@@ -72,11 +71,11 @@ static void *do_task(void *arg_ptr)
             i++;
             SAP = argv[i][0];
             i++;
-            strcpy(QS, argv[i]);  
+            strcpy(QS, argv[i]); 
         }
         else if (strcmp(argv[i], "-s") == 0){
             i++;
-            strcpy(ALG, argv[i]);
+            strcpy(ALGT, argv[i]);
             i++;
             Q = atoi(argv[i]);
         }
@@ -93,9 +92,6 @@ static void *do_task(void *arg_ptr)
             strcpy(OUTFILE, argv[i]);
         }
     }
-    if (strcmp(ALG, "RR") != 0) {
-        Q = 0;
-    }
 
     if (SAP == 'S'){
         queueId = 0;
@@ -105,16 +101,16 @@ static void *do_task(void *arg_ptr)
     }
 
     while(heads[queueId] == NULL){
-        //usleep(1);
+        usleep(1);
     }
 
-    while( heads[queueId]->data.pid > -1 && heads != NULL){
+    while( heads[queueId]->data.pid > 0){
         pthread_mutex_lock(&lock);
         // critical section
 
         struct burst_item *burst;
 
-        if (strcmp(ALG, "FCFS") == 0){
+        if (strcmp(ALGT, "FCFS") == 0 && heads[queueId]->data.pid > 0){
             burst = &heads[queueId]->data;
 
             if (OUTMODE == 2) {
@@ -133,9 +129,19 @@ static void *do_task(void *arg_ptr)
             burst->waitingTime = burst->turnaroundTime - burst->burstLength;
 
             insert(&list, burst);
-            deleteNode(heads[queueId], heads[queueId]);
+            deleteNode(&heads[queueId], heads[queueId]);
+            headsLengths[queueId]--;
+
+            /*
+            printf("-----------------\n");
+            struct node *cur = heads[0];
+            while(cur != NULL){
+                printf("%d\n", cur->data.pid);
+                cur = cur->next;
+            }
+            */
         }
-        else if(strcmp(ALG, "SJF") == 0){
+        else if(strcmp(ALGT, "SJF") == 0){
             struct node *curNode = heads[queueId];
             int sjLength = curNode->data.burstLength;
             int sjIndex = 0;
@@ -176,9 +182,9 @@ static void *do_task(void *arg_ptr)
             burst->waitingTime = burst->turnaroundTime - burst->burstLength;
 
             insert(&list, burst);
-            deleteNode(heads[queueId], curNode);
+            deleteNode(&heads[queueId], curNode);
         }
-        else if(strcmp(ALG, "RR") == 0){
+        else if(strcmp(ALGT, "RR") == 0){
             burst = &heads[queueId]->data;
 
             if (OUTMODE == 2) {
@@ -191,7 +197,7 @@ static void *do_task(void *arg_ptr)
                 usleep(Q);
 
                 burst->remainingTime = burst->remainingTime - Q;
-                deleteNode(heads[queueId], heads[queueId]);
+                deleteNode(&heads[queueId], heads[queueId]);
                 insert(&heads[queueId], burst);
             }
             else {
@@ -205,13 +211,12 @@ static void *do_task(void *arg_ptr)
                 burst->waitingTime = burst->turnaroundTime - burst->burstLength;
 
                 insert(&list, burst);
-                deleteNode(heads[queueId], heads[queueId]);
+                deleteNode(&heads[queueId], heads[queueId]);
             }
         }
     
         pthread_mutex_unlock(&lock);
     }
-    */
 
 	pthread_exit(NULL); //  tell a reason to thread waiting in join
 }
@@ -233,11 +238,11 @@ int main(int argc, char *argv[])
 
     int N = 2;
     char SAP = 'M';
-    char QS[] = "RM";
-    char ALG[] = "RR";
-    char INFILE[] = "in.txt";
-    char OUTFILE[] = "out.txt";
-    int randS[] = {200, 10, 1000, 100, 10, 500};
+    char QS[2] = "RM";
+    char ALG[5] = "RR";
+    char INFILE[10] = "in.txt";
+    char OUTFILE[10] = "out.txt";
+    int randS[6] = {200, 10, 1000, 100, 10, 500};
     
     bool infileMode = false;
     list = NULL;
@@ -313,20 +318,19 @@ int main(int argc, char *argv[])
 
             if (ch == 'P'){            
                 k = 0;
+                strcpy(textPL, "");
                 ch = fgetc(ptr);
                 ch = fgetc(ptr);
                 do {
                     textPL[k] = ch;
                     ch = fgetc(ptr);
                     k++;
-                } while (ch != EOF && ch != '\n');
+                } while (ch != EOF && ch != '\n' && ch != ' ');
                 struct burst_item *burst = (struct burst_item*) malloc(sizeof(struct burst_item));
                 burst->pid = countPid;
                 countPid++;
                 burst->burstLength = atoi(textPL);
                 burst->remainingTime = atoi(textPL);
-
-                printf("++%d\n", burst->pid);
             
                 gettimeofday(&current_time, NULL);
                 currentTime = current_time.tv_usec;
@@ -358,6 +362,7 @@ int main(int argc, char *argv[])
             }
             else if (ch == 'I'){
                 k = 0;
+                strcpy(textIAT, "");
                 ch = fgetc(ptr);
                 ch = fgetc(ptr);
                 ch = fgetc(ptr);
@@ -475,17 +480,17 @@ int main(int argc, char *argv[])
 
     struct node *cur = heads[0];
     while(cur != NULL){
-        printf("%d\n", cur->data.pid);
+        printf("%d\t%d\n", cur->data.pid, cur->data.burstLength);
         cur = cur->next;
     }
 
     pthread_mutex_unlock(&lock);
 
     for (int i = 0; i < N; ++i) {
-        t_args->argv = argv;
-        t_args->t_index = i;
+        t_args[i].argv = argv;
+        t_args[i].t_index = i + 1;
 		
-        ret = pthread_create(&(tids[i]), NULL, do_task, (void *) t_args);
+        ret = pthread_create(&(tids[i]), NULL, do_task, (void *) &(t_args[i]));
        
         if (ret != 0) {
 			exit(1);
@@ -520,6 +525,7 @@ int main(int argc, char *argv[])
         }
         curNode = 0;
         count = 0;
+        curNode = list;
 
         while(count < minIndex){
             curNode = curNode->next;
@@ -527,8 +533,8 @@ int main(int argc, char *argv[])
         }
         burst = curNode->data;
 
-        printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\n", burst.pid, burst.processorId, burst.burstLength, burst.arrivalTime, burst.finishTime, burst.waitingTime, burst.turnaroundTime);
-        deleteNode(list,curNode);
+        printf("%d\t%d\t%d\t\t%d\t%d\t%d\t\t%d\n", burst.pid, burst.processorId, burst.burstLength, burst.arrivalTime, burst.finishTime, burst.waitingTime, burst.turnaroundTime);
+        deleteNode(&list,curNode);
     }
 }
 
@@ -564,27 +570,25 @@ void insert(struct node** head, struct burst_item* newItem) {
     *head = current;
 }
 
-void deleteNode(struct node* head, struct node* del) 
-{ 
+void deleteNode(struct node** head_ref, struct node* del)
+{
     /* base case */
-    if (head == NULL || del == NULL) 
-        return; 
+    if (*head_ref == NULL || del == NULL)
+        return;
   
     /* If node to be deleted is head node */
-    if (head == del) 
-        head = del->next; 
+    if (*head_ref == del)
+        *head_ref = del->next;
   
-    /* Change next only if node to be 
-    deleted is NOT the last node */
-    if (del->next != NULL) 
-        del->next->prev = del->prev; 
+    /* Change next only if node to be deleted is NOT the last node */
+    if (del->next != NULL)
+        del->next->prev = del->prev;
   
-    /* Change prev only if node to be 
-    deleted is NOT the first node */
-    if (del->prev != NULL) 
-        del->prev->next = del->next; 
+    /* Change prev only if node to be deleted is NOT the first node */
+    if (del->prev != NULL)
+        del->prev->next = del->next;
   
     /* Finally, free the memory occupied by del*/
-    free(del); 
-    return; 
-} 
+    free(del);
+    return;
+}
