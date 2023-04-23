@@ -55,10 +55,9 @@ static void *do_task(void *arg_ptr)
     printf("*************************\n");
 
     char SAP = 'M';
-    char QS[2] = "RM";
+    char QS[3] = "RM";
     char ALGT[5] = "RR";
     int Q = 20;
-    char INFILE[10] = "in.txt";
     int OUTMODE = 1;
     char OUTFILE[10] = "out.txt";
     int queueId;
@@ -67,21 +66,17 @@ static void *do_task(void *arg_ptr)
     int tid = ((struct arg *) arg_ptr)->t_index;
 
     for (int i = 0; i < sizeArgv; i++) {
-        if (strcmp(argv[i], "-a") == 0){
+        if (strcmp(argv[i], "-a") == 0){        
             i++;
             SAP = argv[i][0];
             i++;
-            strcpy(QS, argv[i]); 
+            strcpy(QS, argv[i]);
         }
         else if (strcmp(argv[i], "-s") == 0){
             i++;
             strcpy(ALGT, argv[i]);
             i++;
             Q = atoi(argv[i]);
-        }
-        else if (strcmp(argv[i], "-i") == 0){
-            i++;
-            strcpy(INFILE, argv[i]);
         }
         else if (strcmp(argv[i], "-m") == 0){
             i++;
@@ -141,14 +136,14 @@ static void *do_task(void *arg_ptr)
             }
             */
         }
-        else if(strcmp(ALGT, "SJF") == 0){
+        else if(strcmp(ALGT, "SJF") == 0 && heads[queueId]->data.pid > 0){
             struct node *curNode = heads[queueId];
             int sjLength = curNode->data.burstLength;
             int sjIndex = 0;
             int count = 0;
 
             while(curNode != NULL){
-                if (curNode->data.burstLength < sjLength) {
+                if (curNode->data.burstLength < sjLength && curNode->data.burstLength > 0) {
                     sjLength = curNode->data.burstLength;
                     sjIndex = count;
                 }
@@ -183,8 +178,11 @@ static void *do_task(void *arg_ptr)
 
             insert(&list, burst);
             deleteNode(&heads[queueId], curNode);
+            headsLengths[queueId]--;
         }
-        else if(strcmp(ALGT, "RR") == 0){
+        else if(strcmp(ALGT, "RR") == 0 && heads[queueId]->data.pid > 0){
+            struct burst_item *burst1 = (struct burst_item*) malloc(sizeof(struct burst_item));
+            
             burst = &heads[queueId]->data;
 
             if (OUTMODE == 2) {
@@ -197,8 +195,9 @@ static void *do_task(void *arg_ptr)
                 usleep(Q);
 
                 burst->remainingTime = burst->remainingTime - Q;
+                burst1 = burst;
+                insert(&heads[queueId], burst1);
                 deleteNode(&heads[queueId], heads[queueId]);
-                insert(&heads[queueId], burst);
             }
             else {
                 usleep(burst->remainingTime);
@@ -212,6 +211,7 @@ static void *do_task(void *arg_ptr)
 
                 insert(&list, burst);
                 deleteNode(&heads[queueId], heads[queueId]);
+                headsLengths[queueId]--;
             }
         }
     
@@ -238,8 +238,7 @@ int main(int argc, char *argv[])
 
     int N = 2;
     char SAP = 'M';
-    char QS[2] = "RM";
-    char ALG[5] = "RR";
+    char QS[3] = "RM";
     char INFILE[10] = "in.txt";
     char OUTFILE[10] = "out.txt";
     int randS[6] = {200, 10, 1000, 100, 10, 500};
@@ -258,6 +257,8 @@ int main(int argc, char *argv[])
 
 	FILE* ptr;
 	char ch;
+    char textPL[8];
+    char textIAT[8];
 
     int countPid = 1;
     int countRR = 0;
@@ -272,10 +273,6 @@ int main(int argc, char *argv[])
             SAP = argv[i][0];
             i++;
             strcpy(QS, argv[i]);
-        }
-        else if (strcmp(argv[i], "-s") == 0){
-            i++;
-            strcpy(ALG, argv[i]);
         }
         else if (strcmp(argv[i], "-i") == 0){
             i++;
@@ -311,21 +308,22 @@ int main(int argc, char *argv[])
     if(infileMode){
         ptr = fopen(INFILE, "r");
         int k = 0;
-        char textPL[4];
-        char textIAT[4];
+        
         do {
             ch = fgetc(ptr);
 
             if (ch == 'P'){            
                 k = 0;
-                strcpy(textPL, "");
+                memset(textPL,0,strlen(textPL));
+                ch = fgetc(ptr);
                 ch = fgetc(ptr);
                 ch = fgetc(ptr);
                 do {
                     textPL[k] = ch;
+
                     ch = fgetc(ptr);
                     k++;
-                } while (ch != EOF && ch != '\n' && ch != ' ');
+                } while (ch != EOF && isdigit(ch));
                 struct burst_item *burst = (struct burst_item*) malloc(sizeof(struct burst_item));
                 burst->pid = countPid;
                 countPid++;
@@ -362,7 +360,8 @@ int main(int argc, char *argv[])
             }
             else if (ch == 'I'){
                 k = 0;
-                strcpy(textIAT, "");
+                memset(textIAT,0,strlen(textIAT));
+                ch = fgetc(ptr);
                 ch = fgetc(ptr);
                 ch = fgetc(ptr);
                 ch = fgetc(ptr);
@@ -374,6 +373,7 @@ int main(int argc, char *argv[])
                 usleep(atoi(textIAT));
             }
         } while (ch != EOF);
+        fclose(ptr);
     }
     else{
         int count = 0;
@@ -460,7 +460,7 @@ int main(int argc, char *argv[])
             struct node *currentNode;
             struct node *prevNode;
 
-            currentNode = heads[0];
+            currentNode = heads[i];
             while( currentNode != NULL){
                 prevNode = currentNode;
                 currentNode = currentNode->next;
