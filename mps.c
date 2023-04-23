@@ -14,7 +14,10 @@
 
 #define MAXTHREADS  10		// max number of threads
 
-pthread_mutex_t lock;
+struct arg {
+    char **argv;
+    int t_index;
+};
 
 struct burst_item {
    int pid;
@@ -34,6 +37,7 @@ struct node {
    struct node *prev;
 };
 
+pthread_mutex_t lock;
 struct node **heads;
 struct node *list;
 int *headsLengths;
@@ -42,12 +46,15 @@ int startTime;
 struct timeval current_time;
 int sizeArgv;
 
-void insert(struct node* head, struct burst_item* newItem);
-void deleteNode(struct node* head, struct node* del);
+void insert(struct node**, struct burst_item*);
+void deleteNode(struct node*, struct node*);
 
 // this is the function to be executed by all the threads concurrently
 static void *do_task(void *arg_ptr)
 {
+    printf("*************************\n");
+    /*
+
     char SAP = 'M';
     char QS[] = "RM";
     char ALG[] = "RR";
@@ -55,8 +62,10 @@ static void *do_task(void *arg_ptr)
     char INFILE[] = "in.txt";
     int OUTMODE = 1;
     char OUTFILE[] = "out.txt";
+    int queueId;
 
-    char **argv = (char **)arg_ptr;   
+    char **argv = ((struct arg *) arg_ptr)->argv;
+    int tid = ((struct arg *) arg_ptr)->t_index;
 
     for (int i = 0; i < sizeArgv; i++) {
         if (strcmp(argv[i], "-a") == 0){
@@ -88,22 +97,20 @@ static void *do_task(void *arg_ptr)
         Q = 0;
     }
 
-    int queueId;
-    pid_t tid = syscall(__NR_gettid);
+    if (SAP == 'S'){
+        queueId = 0;
+    }
+    else {
+        queueId = tid - 1;
+    }
 
-    while( heads[tid]->data.pid != -1){
+    while(heads[queueId] == NULL){
+        //usleep(1);
+    }
+
+    while( heads[queueId]->data.pid > -1 && heads != NULL){
         pthread_mutex_lock(&lock);
         // critical section
-        
-        if (SAP == 'S'){
-            queueId = 0;
-        }
-        else {
-            queueId = tid;
-        }
-
-        while(heads[queueId] == NULL)
-            sleep(1);
 
         struct burst_item *burst;
 
@@ -116,7 +123,7 @@ static void *do_task(void *arg_ptr)
                 printf("time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
             }
 
-            sleep(burst->burstLength);
+            usleep(burst->burstLength);
             
             gettimeofday(&current_time, NULL);
             int currentTime = current_time.tv_usec;
@@ -125,7 +132,7 @@ static void *do_task(void *arg_ptr)
             burst->turnaroundTime = burst->finishTime - burst->arrivalTime;
             burst->waitingTime = burst->turnaroundTime - burst->burstLength;
 
-            insert(list, burst);
+            insert(&list, burst);
             deleteNode(heads[queueId], heads[queueId]);
         }
         else if(strcmp(ALG, "SJF") == 0){
@@ -159,7 +166,7 @@ static void *do_task(void *arg_ptr)
                 printf("time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
             }
 
-            sleep(burst->burstLength);
+            usleep(burst->burstLength);
 
             gettimeofday(&current_time, NULL);
             int currentTime = current_time.tv_usec;
@@ -168,7 +175,7 @@ static void *do_task(void *arg_ptr)
             burst->turnaroundTime = burst->finishTime - burst->arrivalTime;
             burst->waitingTime = burst->turnaroundTime - burst->burstLength;
 
-            insert(list, burst);
+            insert(&list, burst);
             deleteNode(heads[queueId], curNode);
         }
         else if(strcmp(ALG, "RR") == 0){
@@ -181,14 +188,14 @@ static void *do_task(void *arg_ptr)
             }
 
             if (burst->remainingTime > Q){                
-                sleep(Q);
+                usleep(Q);
 
                 burst->remainingTime = burst->remainingTime - Q;
                 deleteNode(heads[queueId], heads[queueId]);
-                insert(heads[queueId], burst);
+                insert(&heads[queueId], burst);
             }
             else {
-                sleep(burst->remainingTime);
+                usleep(burst->remainingTime);
 
                 gettimeofday(&current_time, NULL);
                 int currentTime = current_time.tv_usec;
@@ -197,19 +204,22 @@ static void *do_task(void *arg_ptr)
                 burst->turnaroundTime = burst->finishTime - burst->arrivalTime;
                 burst->waitingTime = burst->turnaroundTime - burst->burstLength;
 
-                insert(list, burst);
+                insert(&list, burst);
                 deleteNode(heads[queueId], heads[queueId]);
             }
         }
     
         pthread_mutex_unlock(&lock);
     }
+    */
 
 	pthread_exit(NULL); //  tell a reason to thread waiting in join
 }
 
 int main(int argc, char *argv[])
 {
+    printf("---------------------------\n");
+
     gettimeofday(&current_time, NULL);
     startTime = current_time.tv_usec;
     int currentTime;
@@ -225,24 +235,13 @@ int main(int argc, char *argv[])
     char SAP = 'M';
     char QS[] = "RM";
     char ALG[] = "RR";
-    int Q = 20;
     char INFILE[] = "in.txt";
     char OUTFILE[] = "out.txt";
     int randS[] = {200, 10, 1000, 100, 10, 500};
     
     bool infileMode = false;
-
-    if (SAP =='M'){
-        heads = (struct node **)malloc(N * sizeof(struct node *));
-        for (int i = 0; i < N; i++){
-            heads[i] = NULL;
-        }
-    }
-    else{
-        heads = (struct node **)malloc(sizeof(struct node *));
-        heads[0] = NULL;
-    }
     list = NULL;
+	struct arg t_args[MAXTHREADS];	// thread function arguments
 
     headsLengths = (int*)malloc(N * sizeof(int));
     for (int i = 0; i < N; i++){
@@ -255,7 +254,7 @@ int main(int argc, char *argv[])
 	FILE* ptr;
 	char ch;
 
-    int countPid = 0;
+    int countPid = 1;
     int countRR = 0;
 
     for (int i = 0; i < argc; i++) {
@@ -267,17 +266,16 @@ int main(int argc, char *argv[])
             i++;
             SAP = argv[i][0];
             i++;
-            strcpy(QS, argv[i]);  
+            strcpy(QS, argv[i]);
         }
         else if (strcmp(argv[i], "-s") == 0){
             i++;
             strcpy(ALG, argv[i]);
-            i++;
-            Q = atoi(argv[i]);
         }
         else if (strcmp(argv[i], "-i") == 0){
             i++;
             strcpy(INFILE, argv[i]);
+            infileMode = true;
         }
         else if (strcmp(argv[i], "-o") == 0){
             i++;
@@ -292,41 +290,43 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (strcmp(ALG, "RR") != 0) {
-        Q = 0;
-    }
+    pthread_mutex_lock(&lock);
 
-    for (int i = 0; i < N; ++i) {
-		ret = pthread_create(&(tids[i]), NULL, do_task, (void *) argv);
-       
-        if (ret != 0) {
-			exit(1);
-		}
+    if (SAP =='M'){
+        heads = (struct node **)malloc(N * sizeof(struct node *));
+        for (int i = 0; i < N; i++){
+            heads[i] = NULL;
+        }
+    }
+    else{
+        heads = (struct node **)malloc(sizeof(struct node *));
+        heads[0] = NULL;
     }
 
     if(infileMode){
         ptr = fopen(INFILE, "r");
         int k = 0;
-        char *textPL = "";
-        char *textIAT = "";
+        char textPL[4];
+        char textIAT[4];
         do {
             ch = fgetc(ptr);
 
-            textPL = "";
-            textIAT = "";
-            if (ch == 'P'){
+            if (ch == 'P'){            
                 k = 0;
                 ch = fgetc(ptr);
+                ch = fgetc(ptr);
                 do {
-                    ch = fgetc(ptr);
                     textPL[k] = ch;
+                    ch = fgetc(ptr);
                     k++;
-                } while (ch != EOF || ch != '\n');
-                struct burst_item *burst;
+                } while (ch != EOF && ch != '\n');
+                struct burst_item *burst = (struct burst_item*) malloc(sizeof(struct burst_item));
                 burst->pid = countPid;
                 countPid++;
                 burst->burstLength = atoi(textPL);
                 burst->remainingTime = atoi(textPL);
+
+                printf("++%d\n", burst->pid);
             
                 gettimeofday(&current_time, NULL);
                 currentTime = current_time.tv_usec;
@@ -334,13 +334,13 @@ int main(int argc, char *argv[])
                 burst->arrivalTime = (currentTime - startTime);
                 if (SAP == 'S'){
                     burst->processorId = 1;
-                    insert(heads[0], burst);
+                    insert(&heads[0], burst);
                     headsLengths[0] = headsLengths[0] + 1;
                 }
                 else {
                     if (strcmp(QS, "RM")){
                         burst->processorId = (countRR % N) + 1;
-                        insert(heads[countRR % N], burst);
+                        insert(&heads[countRR % N], burst);
                         countRR++;
                     }
                     else {
@@ -351,21 +351,22 @@ int main(int argc, char *argv[])
                         }
                         burst->processorId = minIndex + 1;
                         
-                        insert(heads[minIndex], burst);
+                        insert(&heads[minIndex], burst);
                         headsLengths[minIndex] = headsLengths[minIndex] + 1;
                     }
                 }
             }
-            else if (ch == 'A'){
+            else if (ch == 'I'){
                 k = 0;
                 ch = fgetc(ptr);
                 ch = fgetc(ptr);
+                ch = fgetc(ptr);
                 do {
-                    ch = fgetc(ptr);
                     textIAT[k] = ch;
                     k++;
-                } while (ch != EOF || ch != '\n');
-                sleep(atoi(textIAT));
+                    ch = fgetc(ptr);
+                } while (ch != EOF && ch != '\n');
+                usleep(atoi(textIAT));
             }
         } while (ch != EOF);
     }
@@ -373,17 +374,18 @@ int main(int argc, char *argv[])
         int count = 0;
 
         while(count < 6){
-            double lambdaT = 1 / randS[0];
+            double lambdaT = 1.0 / randS[0];
             double uT = ((double)rand()) / RAND_MAX;
             double xT = ((-1) * log(1 - uT)) / lambdaT;
 
-            double lambdaL = 1 / randS[3];
+            double lambdaL = 1.0 / randS[3];
             double uL = ((double)rand()) / RAND_MAX;
             double xL = ((-1) * log(1 - uL)) / lambdaL;
 
             if (xT > randS[1] && xT < randS[2] && xL > randS[4] && xL < randS[5])
             {
-                struct burst_item *burst;
+                count++;
+                struct burst_item *burst = (struct burst_item*) malloc(sizeof(struct burst_item));
                 burst->pid = countPid;
                 countPid++;
 
@@ -397,13 +399,13 @@ int main(int argc, char *argv[])
 
                 if (SAP == 'S'){
                     burst->processorId = 1;
-                    insert(heads[0], burst);
+                    insert(&heads[0], burst);
                     headsLengths[0] = headsLengths[0] + 1;
                 }
                 else {
                     if (strcmp(QS, "RM")){
                         burst->processorId = (countRR % N) + 1;
-                        insert(heads[countRR % N], burst);
+                        insert(&heads[countRR % N], burst);
                         countRR++;
                     }
                     else {
@@ -414,13 +416,12 @@ int main(int argc, char *argv[])
                         }
                         burst->processorId = minIndex + 1;
                         
-                        insert(heads[minIndex], burst);
+                        insert(&heads[minIndex], burst);
                         headsLengths[minIndex] = headsLengths[minIndex] + 1;
                     }
                 }
-                sleep(xT);
+                usleep(xT);
             }
-            
         }
     }
     
@@ -428,15 +429,23 @@ int main(int argc, char *argv[])
         struct node *dummyItem = (struct node*) malloc(sizeof(struct node));
         (&dummyItem->data)->pid = -1;
         struct node *currentNode;
+        struct node *prevNode;
 
         currentNode = heads[0];
         while( currentNode != NULL){
+            prevNode = currentNode;
             currentNode = currentNode->next;
         }
 
-        currentNode->prev->next = dummyItem;
-        dummyItem->prev = currentNode->prev;
-        dummyItem->next = currentNode->next;
+        if(prevNode != NULL){
+            prevNode->next = dummyItem;
+            dummyItem->prev = prevNode;
+            dummyItem->next = NULL;
+        }
+        else{
+            dummyItem->next = NULL;
+            dummyItem->prev = NULL;
+        }
     }
     else{
         for (int i = 0; i < N; i++)
@@ -444,16 +453,43 @@ int main(int argc, char *argv[])
             struct node *dummyItem = (struct node*) malloc(sizeof(struct node));
             (&dummyItem->data)->pid = -1;
             struct node *currentNode;
+            struct node *prevNode;
 
             currentNode = heads[0];
             while( currentNode != NULL){
+                prevNode = currentNode;
                 currentNode = currentNode->next;
             }
 
-            currentNode->prev->next = dummyItem;
-            dummyItem->prev = currentNode->prev;
-            dummyItem->next = currentNode->next;
+            if(prevNode != NULL){
+                prevNode->next = dummyItem;
+                dummyItem->prev = prevNode;
+                dummyItem->next = NULL;
+            }
+            else{
+                dummyItem->next = NULL;
+                dummyItem->prev = NULL;
+            }
         }
+    }
+
+    struct node *cur = heads[0];
+    while(cur != NULL){
+        printf("%d\n", cur->data.pid);
+        cur = cur->next;
+    }
+
+    pthread_mutex_unlock(&lock);
+
+    for (int i = 0; i < N; ++i) {
+        t_args->argv = argv;
+        t_args->t_index = i;
+		
+        ret = pthread_create(&(tids[i]), NULL, do_task, (void *) t_args);
+       
+        if (ret != 0) {
+			exit(1);
+		}
     }
 
     for (int i = 0; i < N; ++i) {
@@ -494,38 +530,38 @@ int main(int argc, char *argv[])
         printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\n", burst.pid, burst.processorId, burst.burstLength, burst.arrivalTime, burst.finishTime, burst.waitingTime, burst.turnaroundTime);
         deleteNode(list,curNode);
     }
-
 }
 
-void insert(struct node* head, struct burst_item* newItem) {
-   struct node *newNode = (struct node*) malloc(sizeof(struct node));
-   newNode->data = *newItem;
+void insert(struct node** head, struct burst_item* newItem) {
+    struct node *newNode = (struct node*) malloc(sizeof(struct node));
+    newNode->data = *newItem;
 
-   struct node *current = head;
+    struct node *current = *head;
+    struct node *prev = current;
 
-   if (head != NULL){
-      while( head != NULL || head->data.pid != -1){
-         head = head->next;
-         if (head == NULL)
-            break;
-      }
-   }
-   else {
-      newNode->next = NULL;
-      newNode->prev = NULL;
-      head = newNode;
-      return;
-   }
+    if (*head != NULL){
+        while( *head != NULL && (*head)->data.pid != -1){
+            prev = *head;
+            *head = (*head)->next;            
+        }
+    }
+    else {
+        newNode->next = NULL;
+        newNode->prev = NULL;
+        *head = newNode;
+        return;
+    }
 
-   newNode->next = head;
-   if (head != NULL) {
-      newNode->prev = head->prev;
-      head->prev = newNode;
-      if (head->prev != NULL)
-         head->prev->next = newNode;
-   }
+    newNode->next = *head;
+    newNode->prev = prev;
+    if (prev != NULL) {
+        prev->next = newNode;
+    }
+    if (*head != NULL) {
+        (*head)->prev = newNode;
+    }
 
-   head = current;
+    *head = current;
 }
 
 void deleteNode(struct node* head, struct node* del) 
