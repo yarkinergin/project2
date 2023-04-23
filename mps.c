@@ -52,8 +52,6 @@ void deleteNode(struct node**, struct node*);
 // this is the function to be executed by all the threads concurrently
 static void *do_task(void *arg_ptr)
 {
-    printf("*************************\n");
-
     char SAP = 'M';
     char QS[3] = "RM";
     char ALGT[5] = "RR";
@@ -61,6 +59,8 @@ static void *do_task(void *arg_ptr)
     int OUTMODE = 1;
     char OUTFILE[10] = "out.txt";
     int queueId;
+
+    FILE *fptr;
 
     char **argv = ((struct arg *) arg_ptr)->argv;
     int tid = ((struct arg *) arg_ptr)->t_index;
@@ -80,13 +80,17 @@ static void *do_task(void *arg_ptr)
         }
         else if (strcmp(argv[i], "-m") == 0){
             i++;
-            OUTMODE = atoi(argv[i]);
+            OUTMODE = OUTMODE + atoi(argv[i]) - 1;
         }
         else if (strcmp(argv[i], "-o") == 0){
             i++;
             strcpy(OUTFILE, argv[i]);
+            *(&OUTMODE) = *(&OUTMODE) + 3;
         }
     }
+
+    if (OUTMODE > 3)
+        fptr = fopen(OUTFILE,"a");
 
     if (SAP == 'S'){
         queueId = 0;
@@ -113,8 +117,34 @@ static void *do_task(void *arg_ptr)
                 int currentTime = current_time.tv_usec - startTime;
                 printf("time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
             }
+            else if (OUTMODE == 3) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                printf("Burst started: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
+            else if (OUTMODE == 5) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                fprintf(fptr, "time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
+            else if (OUTMODE == 6) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                fprintf(fptr, "Burst started: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
 
             usleep(burst->burstLength);
+
+            if (OUTMODE == 3) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                printf("Burst finished: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
+            else if (OUTMODE == 6) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                fprintf(fptr, "Burst finished: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
             
             gettimeofday(&current_time, NULL);
             int currentTime = current_time.tv_usec;
@@ -166,8 +196,34 @@ static void *do_task(void *arg_ptr)
                 int currentTime = current_time.tv_usec - startTime;
                 printf("time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
             }
+            else if (OUTMODE == 3) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                printf("Burst started: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
+            else if (OUTMODE == 5) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                fprintf(fptr, "time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
+            else if (OUTMODE == 6) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                fprintf(fptr, "Burst started: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
 
             usleep(burst->burstLength);
+
+            if (OUTMODE == 3) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                printf("Burst finished: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
+            if (OUTMODE == 6) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                fprintf(fptr, "Burst finished: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
 
             gettimeofday(&current_time, NULL);
             int currentTime = current_time.tv_usec;
@@ -190,6 +246,21 @@ static void *do_task(void *arg_ptr)
                 int currentTime = current_time.tv_usec - startTime;
                 printf("time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
             }
+            else if (OUTMODE == 3) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                printf("Burst started: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
+            else if (OUTMODE == 5) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                fprintf(fptr, "time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
+            else if (OUTMODE == 6) {
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec - startTime;
+                fprintf(fptr, "Burst started: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+            }
 
             if (burst->remainingTime > Q){                
                 usleep(Q);
@@ -202,6 +273,17 @@ static void *do_task(void *arg_ptr)
             else {
                 usleep(burst->remainingTime);
 
+                if (OUTMODE == 3) {
+                    gettimeofday(&current_time, NULL);
+                    int currentTime = current_time.tv_usec - startTime;
+                    printf("Burst finished: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+                }
+                else if (OUTMODE == 6) {
+                    gettimeofday(&current_time, NULL);
+                    int currentTime = current_time.tv_usec - startTime;
+                    fprintf(fptr, "Burst finished: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
+                }
+
                 gettimeofday(&current_time, NULL);
                 int currentTime = current_time.tv_usec;
 
@@ -213,18 +295,18 @@ static void *do_task(void *arg_ptr)
                 deleteNode(&heads[queueId], heads[queueId]);
                 headsLengths[queueId]--;
             }
-        }
-    
+        }    
         pthread_mutex_unlock(&lock);
     }
 
+    if (OUTMODE > 3){
+        fclose(fptr);
+    }
 	pthread_exit(NULL); //  tell a reason to thread waiting in join
 }
 
 int main(int argc, char *argv[])
 {
-    printf("---------------------------\n");
-
     gettimeofday(&current_time, NULL);
     startTime = current_time.tv_usec;
     int currentTime;
@@ -241,7 +323,9 @@ int main(int argc, char *argv[])
     char QS[3] = "RM";
     char INFILE[10] = "in.txt";
     char OUTFILE[10] = "out.txt";
+    int OUTMODE = 1;
     int randS[6] = {200, 10, 1000, 100, 10, 500};
+
     
     bool infileMode = false;
     list = NULL;
@@ -255,6 +339,7 @@ int main(int argc, char *argv[])
 	int ret;
 	char *retmsg;
 
+    FILE *fptr;
 	FILE* ptr;
 	char ch;
     char textPL[8];
@@ -279,9 +364,14 @@ int main(int argc, char *argv[])
             strcpy(INFILE, argv[i]);
             infileMode = true;
         }
+        else if (strcmp(argv[i], "-m") == 0){
+            i++;
+            OUTMODE = OUTMODE + atoi(argv[i]) - 1;
+        }
         else if (strcmp(argv[i], "-o") == 0){
             i++;
             strcpy(OUTFILE, argv[i]);
+            OUTMODE = OUTMODE + 3;
         }
         else if (strcmp(argv[i], "-r") == 0){
             for(int j = 0; j < 6; j++){
@@ -307,6 +397,7 @@ int main(int argc, char *argv[])
 
     if(infileMode){
         ptr = fopen(INFILE, "r");
+        fptr = fopen(OUTFILE,"w");
         int k = 0;
         
         do {
@@ -338,12 +429,32 @@ int main(int argc, char *argv[])
                     burst->processorId = 1;
                     insert(&heads[0], burst);
                     headsLengths[0] = headsLengths[0] + 1;
+                    if (OUTMODE == 3) {
+                        gettimeofday(&current_time, NULL);
+                        int currentTime = current_time.tv_usec - startTime;
+                        printf("Burst added queue: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, burst->processorId, burst->pid, burst->burstLength, burst->remainingTime);
+                    }
+                    else if (OUTMODE == 6) {
+                        gettimeofday(&current_time, NULL);
+                        int currentTime = current_time.tv_usec - startTime;
+                        fprintf(fptr, "Burst added queue: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, burst->processorId, burst->pid, burst->burstLength, burst->remainingTime);
+                    }
                 }
                 else {
                     if (strcmp(QS, "RM")){
                         burst->processorId = (countRR % N) + 1;
                         insert(&heads[countRR % N], burst);
                         countRR++;
+                        if (OUTMODE == 3) {
+                            gettimeofday(&current_time, NULL);
+                            int currentTime = current_time.tv_usec - startTime;
+                            printf("Burst added queue: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, burst->processorId, burst->pid, burst->burstLength, burst->remainingTime);
+                        }
+                        else if (OUTMODE == 6) {
+                            gettimeofday(&current_time, NULL);
+                            int currentTime = current_time.tv_usec - startTime;
+                            fprintf(fptr, "Burst added queue: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, burst->processorId, burst->pid, burst->burstLength, burst->remainingTime);
+                        }
                     }
                     else {
                         int minIndex = 0;
@@ -355,6 +466,16 @@ int main(int argc, char *argv[])
                         
                         insert(&heads[minIndex], burst);
                         headsLengths[minIndex] = headsLengths[minIndex] + 1;
+                        if (OUTMODE == 3) {
+                            gettimeofday(&current_time, NULL);
+                            int currentTime = current_time.tv_usec - startTime;
+                            printf("Burst added queue: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, burst->processorId, burst->pid, burst->burstLength, burst->remainingTime);
+                        }
+                        else if (OUTMODE == 6) {
+                            gettimeofday(&current_time, NULL);
+                            int currentTime = current_time.tv_usec - startTime;
+                            fprintf(fptr, "Burst added queue: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, burst->processorId, burst->pid, burst->burstLength, burst->remainingTime);
+                        }
                     }
                 }
             }
@@ -374,6 +495,7 @@ int main(int argc, char *argv[])
             }
         } while (ch != EOF);
         fclose(ptr);
+        fclose(fptr);
     }
     else{
         int count = 0;
@@ -476,12 +598,6 @@ int main(int argc, char *argv[])
                 dummyItem->prev = NULL;
             }
         }
-    }
-
-    struct node *cur = heads[0];
-    while(cur != NULL){
-        printf("%d\t%d\n", cur->data.pid, cur->data.burstLength);
-        cur = cur->next;
     }
 
     pthread_mutex_unlock(&lock);
