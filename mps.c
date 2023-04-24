@@ -273,6 +273,14 @@ static void *do_task(void *arg_ptr)
             else {
                 usleep(burst->remainingTime);
 
+                gettimeofday(&current_time, NULL);
+                int currentTime = current_time.tv_usec;
+
+                burst->remainingTime = 0;
+                burst->finishTime = currentTime - startTime;
+                burst->turnaroundTime = burst->finishTime - burst->arrivalTime;
+                burst->waitingTime = burst->turnaroundTime - burst->burstLength;
+
                 if (OUTMODE == 3) {
                     gettimeofday(&current_time, NULL);
                     int currentTime = current_time.tv_usec - startTime;
@@ -284,19 +292,16 @@ static void *do_task(void *arg_ptr)
                     fprintf(fptr, "Burst finished: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
                 }
 
-                gettimeofday(&current_time, NULL);
-                int currentTime = current_time.tv_usec;
-
-                burst->finishTime = currentTime - startTime;
-                burst->turnaroundTime = burst->finishTime - burst->arrivalTime;
-                burst->waitingTime = burst->turnaroundTime - burst->burstLength;
-
                 insert(&list, burst);
                 deleteNode(&heads[queueId], heads[queueId]);
                 headsLengths[queueId]--;
             }
         }    
         pthread_mutex_unlock(&lock);
+
+        while(heads[queueId] == NULL){
+            usleep(1);
+        }
     }
 
     if (OUTMODE > 3){
@@ -380,6 +385,17 @@ int main(int argc, char *argv[])
             }
             infileMode = false;
         }
+    }
+
+    for (int i = 0; i < N; ++i) {
+        t_args[i].argv = argv;
+        t_args[i].t_index = i + 1;
+		
+        ret = pthread_create(&(tids[i]), NULL, do_task, (void *) &(t_args[i]));
+       
+        if (ret != 0) {
+			exit(1);
+		}
     }
 
     pthread_mutex_lock(&lock);
@@ -601,17 +617,6 @@ int main(int argc, char *argv[])
     }
 
     pthread_mutex_unlock(&lock);
-
-    for (int i = 0; i < N; ++i) {
-        t_args[i].argv = argv;
-        t_args[i].t_index = i + 1;
-		
-        ret = pthread_create(&(tids[i]), NULL, do_task, (void *) &(t_args[i]));
-       
-        if (ret != 0) {
-			exit(1);
-		}
-    }
 
     for (int i = 0; i < N; ++i) {
 	    ret = pthread_join(tids[i], (void **)&retmsg);
