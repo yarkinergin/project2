@@ -240,7 +240,7 @@ static void *do_task(void *arg_ptr)
             struct burst_item *burst1 = (struct burst_item*) malloc(sizeof(struct burst_item));
             
             burst = &heads[queueId]->data;
-
+            
             if (OUTMODE == 2) {
                 gettimeofday(&current_time, NULL);
                 int currentTime = current_time.tv_usec - startTime;
@@ -325,13 +325,12 @@ int main(int argc, char *argv[])
 
     int N = 2;
     char SAP = 'M';
-    char QS[3] = "RM";
+    char QS[4] = "RM";
     char INFILE[10] = "in.txt";
     char OUTFILE[10] = "out.txt";
     int OUTMODE = 1;
     int randS[6] = {200, 10, 1000, 100, 10, 500};
 
-    
     bool infileMode = false;
     list = NULL;
 	struct arg t_args[MAXTHREADS];	// thread function arguments
@@ -387,19 +386,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    for (int i = 0; i < N; ++i) {
-        t_args[i].argv = argv;
-        t_args[i].t_index = i + 1;
-		
-        ret = pthread_create(&(tids[i]), NULL, do_task, (void *) &(t_args[i]));
-       
-        if (ret != 0) {
-			exit(1);
-		}
-    }
-
-    pthread_mutex_lock(&lock);
-
     if (SAP =='M'){
         heads = (struct node **)malloc(N * sizeof(struct node *));
         for (int i = 0; i < N; i++){
@@ -410,6 +396,19 @@ int main(int argc, char *argv[])
         heads = (struct node **)malloc(sizeof(struct node *));
         heads[0] = NULL;
     }
+
+    for (int i = 0; i < N; ++i) {
+        t_args[i].argv = argv;
+        t_args[i].t_index = i + 1;
+
+        ret = pthread_create(&(tids[i]), NULL, do_task, (void *) &(t_args[i]));
+       
+        if (ret != 0) {
+			exit(1);
+		}
+    }
+
+    pthread_mutex_lock(&lock);
 
     if(infileMode){
         ptr = fopen(INFILE, "r");
@@ -599,19 +598,27 @@ int main(int argc, char *argv[])
             struct node *prevNode;
 
             currentNode = heads[i];
-            while( currentNode != NULL){
-                prevNode = currentNode;
-                currentNode = currentNode->next;
-            }
-
-            if(prevNode != NULL){
-                prevNode->next = dummyItem;
-                dummyItem->prev = prevNode;
-                dummyItem->next = NULL;
-            }
-            else{
+            prevNode = heads[i];
+            if(currentNode == NULL){
                 dummyItem->next = NULL;
                 dummyItem->prev = NULL;
+                heads[i] = dummyItem;
+            }
+            else{
+                while( currentNode != NULL){
+                    prevNode = currentNode;
+                    currentNode = currentNode->next;
+                }
+
+                if(prevNode != NULL){
+                    prevNode->next = dummyItem;
+                    dummyItem->prev = prevNode;
+                    dummyItem->next = NULL;
+                }
+                else{
+                    dummyItem->next = NULL;
+                    dummyItem->prev = NULL;
+                }
             }
         }
     }
