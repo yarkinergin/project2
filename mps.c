@@ -17,6 +17,7 @@
 struct arg {
     char **argv;
     int t_index;
+    pthread_mutex_t lock;
 };
 
 struct burst_item {
@@ -37,7 +38,9 @@ struct node {
    struct node *prev;
 };
 
-pthread_mutex_t lock;
+pthread_mutex_t* locks;
+pthread_mutexattr_t attr;
+
 struct node **heads;
 struct node *list;
 int *headsLengths;
@@ -64,6 +67,7 @@ static void *do_task(void *arg_ptr)
 
     char **argv = ((struct arg *) arg_ptr)->argv;
     int tid = ((struct arg *) arg_ptr)->t_index;
+    pthread_mutex_t lock = ((struct arg *) arg_ptr)->lock;
 
     for (int i = 0; i < sizeArgv; i++) {
         if (strcmp(argv[i], "-a") == 0){        
@@ -316,11 +320,6 @@ int main(int argc, char *argv[])
     startTime = current_time.tv_usec;
     int currentTime;
 
-    if (pthread_mutex_init(&lock, NULL) != 0) {
-        printf("\n mutex init has failed\n");
-        return 1;
-    }
-
     sizeArgv = argc;
 
     int N = 2;
@@ -386,10 +385,19 @@ int main(int argc, char *argv[])
         }
     }
 
+    locks = (pthread_mutex_t *)malloc(N * sizeof(pthread_mutex_t));
+
+
+    if (pthread_mutex_init(&locks[0], NULL) != 0) {
+        printf("\n mutex init has failed\n");
+        return 1;
+    }
+
     if (SAP =='M'){
         heads = (struct node **)malloc(N * sizeof(struct node *));
         for (int i = 0; i < N; i++){
             heads[i] = NULL;
+            pthread_mutex_init(&locks[i], &attr);
         }
     }
     else{
@@ -400,6 +408,11 @@ int main(int argc, char *argv[])
     for (int i = 0; i < N; ++i) {
         t_args[i].argv = argv;
         t_args[i].t_index = i + 1;
+        
+        if (SAP =='M')
+            t_args[i].lock = locks[i];
+        else
+            t_args[i].lock = locks[0];
 
         ret = pthread_create(&(tids[i]), NULL, do_task, (void *) &(t_args[i]));
        
@@ -408,7 +421,12 @@ int main(int argc, char *argv[])
 		}
     }
 
-    pthread_mutex_lock(&lock);
+    if (SAP =='M'){
+        for (int i = 0; i < N; ++i)
+            pthread_mutex_lock(&locks[i]);
+    }
+    else
+        pthread_mutex_lock(&locks[0]);
 
     if(infileMode){
         ptr = fopen(INFILE, "r");
@@ -623,7 +641,12 @@ int main(int argc, char *argv[])
         }
     }
 
-    pthread_mutex_unlock(&lock);
+    if (SAP =='M'){
+        for (int i = 0; i < N; ++i)
+            pthread_mutex_unlock(&locks[i]);
+    }
+    else
+        pthread_mutex_unlock(&locks[0]);
 
     for (int i = 0; i < N; ++i) {
 	    ret = pthread_join(tids[i], (void **)&retmsg);
