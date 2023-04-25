@@ -17,7 +17,6 @@
 struct arg {
     char **argv;
     int t_index;
-    pthread_mutex_t lock;
 };
 
 struct burst_item {
@@ -67,7 +66,7 @@ static void *do_task(void *arg_ptr)
 
     char **argv = ((struct arg *) arg_ptr)->argv;
     int tid = ((struct arg *) arg_ptr)->t_index;
-    pthread_mutex_t lock = ((struct arg *) arg_ptr)->lock;
+    pthread_mutex_t *lock;
 
     for (int i = 0; i < sizeArgv; i++) {
         if (strcmp(argv[i], "-a") == 0){        
@@ -103,12 +102,14 @@ static void *do_task(void *arg_ptr)
         queueId = tid - 1;
     }
 
+    lock = &locks[queueId];
+
     while(heads[queueId] == NULL){
         usleep(1);
     }
 
     while( heads[queueId]->data.pid > 0){
-        pthread_mutex_lock(&lock);
+        pthread_mutex_lock(lock);
         // critical section
 
         struct burst_item *burst;
@@ -240,9 +241,7 @@ static void *do_task(void *arg_ptr)
             deleteNode(&heads[queueId], curNode);
             headsLengths[queueId]--;
         }
-        else if(strcmp(ALGT, "RR") == 0 && heads[queueId]->data.pid > 0){
-            struct burst_item *burst1 = (struct burst_item*) malloc(sizeof(struct burst_item));
-            
+        else if(strcmp(ALGT, "RR") == 0 && heads[queueId]->data.pid > 0){            
             burst = &heads[queueId]->data;
             
             if (OUTMODE == 2) {
@@ -266,13 +265,19 @@ static void *do_task(void *arg_ptr)
                 fprintf(fptr, "Burst started: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, tid, burst->pid, burst->burstLength, burst->remainingTime);
             }
 
-            if (burst->remainingTime > Q){                
+            if (burst->remainingTime > Q){    
+                struct burst_item *burst1 = (struct burst_item*) malloc(sizeof(struct burst_item));
+
                 usleep(Q);
 
-                burst->remainingTime = burst->remainingTime - Q;
-                burst1 = burst;
-                insert(&heads[queueId], burst1);
+                burst1->pid = burst->pid;
+                burst1->burstLength = burst->burstLength;
+                burst1->arrivalTime = burst->arrivalTime;
+                burst1->remainingTime = burst->remainingTime - Q;
+                burst1->processorId = burst->processorId;
+
                 deleteNode(&heads[queueId], heads[queueId]);
+                insert(&heads[queueId], burst1);
             }
             else {
                 usleep(burst->remainingTime);
@@ -301,7 +306,7 @@ static void *do_task(void *arg_ptr)
                 headsLengths[queueId]--;
             }
         }    
-        pthread_mutex_unlock(&lock);
+        pthread_mutex_unlock(lock);
 
         while(heads[queueId] == NULL){
             usleep(1);
@@ -412,11 +417,6 @@ int main(int argc, char *argv[])
         t_args[i].argv = argv;
         t_args[i].t_index = i + 1;
         
-        if (SAP =='M')
-            t_args[i].lock = locks[i];
-        else
-            t_args[i].lock = locks[0];
-
         ret = pthread_create(&(tids[i]), NULL, do_task, (void *) &(t_args[i]));
        
         if (ret != 0) {
