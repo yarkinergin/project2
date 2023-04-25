@@ -351,6 +351,9 @@ int main(int argc, char *argv[])
     int countPid = 1;
     int countRR = 0;
 
+    int totalTA = 0;
+    int countTA = 0;
+
     for (int i = 0; i < argc; i++) {
         if (strcmp(argv[i], "-n") == 0){
             i++;
@@ -673,6 +676,7 @@ int main(int argc, char *argv[])
                 minIndex = count;
             }
             curNode = curNode->next;
+            count++;
         }
         curNode = 0;
         count = 0;
@@ -684,9 +688,14 @@ int main(int argc, char *argv[])
         }
         burst = curNode->data;
 
+        totalTA += burst.turnaroundTime;
+        countTA++;
+
         printf("%d\t%d\t%d\t\t%d\t%d\t%d\t\t%d\n", burst.pid, burst.processorId, burst.burstLength, burst.arrivalTime, burst.finishTime, burst.waitingTime, burst.turnaroundTime);
         deleteNode(&list,curNode);
     }
+    if (countTA != 0)
+        printf("average turnaround time: %d ms\n", (int)(totalTA / countTA));
 }
 
 void insert(struct node** head, struct burst_item* newItem) {
