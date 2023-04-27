@@ -751,7 +751,13 @@ void insert(struct node** head, struct burst_item* newItem) {
     struct node *prev = current;
 
     if (*head != NULL){
-        while( *head != NULL && (*head)->data.pid != -1){
+        if ((*head)->data.pid < 0){
+            newNode->next = *head;
+            newNode->prev = NULL;
+            *head = newNode;
+            return;
+        }
+        while( *head != NULL && (*head)->data.pid > 0){
             prev = *head;
             *head = (*head)->next;            
         }
