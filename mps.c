@@ -308,8 +308,14 @@ static void *do_task(void *arg_ptr)
         }    
         pthread_mutex_unlock(lock);
 
-        while(heads[queueId] == NULL){
+        while(1){
             usleep(1);
+            pthread_mutex_lock(lock);
+            if (heads[queueId] != NULL){
+                pthread_mutex_unlock(lock);
+                break;
+            }
+            pthread_mutex_unlock(lock);
         }
     }
 
@@ -393,23 +399,23 @@ int main(int argc, char *argv[])
         }
     }
 
-    locks = (pthread_mutex_t *)malloc(N * sizeof(pthread_mutex_t));
-
-
-    if (pthread_mutex_init(&locks[0], NULL) != 0) {
-        printf("\n mutex init has failed\n");
-        return 1;
-    }
-
     if (SAP =='M'){
         heads = (struct node **)malloc(N * sizeof(struct node *));
+        locks = (pthread_mutex_t *)malloc(N * sizeof(pthread_mutex_t));
         for (int i = 0; i < N; i++){
-            heads[i] = NULL;
-            pthread_mutex_init(&locks[i], &attr);
+            if (pthread_mutex_init(&locks[i], &attr) != 0) {
+                printf("\n mutex init has failed\n");
+                return 1;
+            }
         }
     }
     else{
         heads = (struct node **)malloc(sizeof(struct node *));
+        locks = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+        if (pthread_mutex_init(&locks[0], NULL) != 0) {
+            printf("\n mutex init has failed\n");
+            return 1;
+        }
         heads[0] = NULL;
     }
 
@@ -423,13 +429,6 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
     }
-
-    if (SAP =='M'){
-        for (int i = 0; i < N; ++i)
-            pthread_mutex_lock(&locks[i]);
-    }
-    else
-        pthread_mutex_lock(&locks[0]);
 
     if(infileMode){
         ptr = fopen(INFILE, "r");
@@ -461,10 +460,15 @@ int main(int argc, char *argv[])
                 currentTime = current_time.tv_usec;
             
                 burst->arrivalTime = (currentTime - startTime);
-                if (SAP == 'S'){
+                if (SAP == 'S'){                    
+                    pthread_mutex_lock(&locks[0]);
+                    
                     burst->processorId = 1;
+
                     insert(&heads[0], burst);
+
                     headsLengths[0] = headsLengths[0] + 1;
+
                     if (OUTMODE == 3) {
                         gettimeofday(&current_time, NULL);
                         int currentTime = current_time.tv_usec - startTime;
@@ -475,11 +479,16 @@ int main(int argc, char *argv[])
                         int currentTime = current_time.tv_usec - startTime;
                         fprintf(fptr, "Burst added queue: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, burst->processorId, burst->pid, burst->burstLength, burst->remainingTime);
                     }
+                    pthread_mutex_unlock(&locks[0]);
                 }
                 else {
+                    for (int i = 0; i < N; ++i)
+                        pthread_mutex_lock(&locks[i]);
                     if (strcmp(QS, "RM")){
                         burst->processorId = (countRR % N) + 1;
+                        
                         insert(&heads[countRR % N], burst);
+
                         countRR++;
                         if (OUTMODE == 3) {
                             gettimeofday(&current_time, NULL);
@@ -493,6 +502,7 @@ int main(int argc, char *argv[])
                         }
                     }
                     else {
+
                         int minIndex = 0;
                         for(int x = 0; x < N; x++){
                             if(headsLengths[x] < headsLengths[minIndex])
@@ -501,7 +511,9 @@ int main(int argc, char *argv[])
                         burst->processorId = minIndex + 1;
                         
                         insert(&heads[minIndex], burst);
+
                         headsLengths[minIndex] = headsLengths[minIndex] + 1;
+
                         if (OUTMODE == 3) {
                             gettimeofday(&current_time, NULL);
                             int currentTime = current_time.tv_usec - startTime;
@@ -513,6 +525,8 @@ int main(int argc, char *argv[])
                             fprintf(fptr, "Burst added queue: time= %d, cpu= %d, pid= %d, burstlen= %d, remainintime = %d\n", currentTime, burst->processorId, burst->pid, burst->burstLength, burst->remainingTime);
                         }
                     }
+                    for (int i = 0; i < N; ++i)
+                        pthread_mutex_unlock(&locks[i]);
                 }
             }
             else if (ch == 'I'){
@@ -561,14 +575,24 @@ int main(int argc, char *argv[])
                 burst->arrivalTime = currentTime - startTime;
 
                 if (SAP == 'S'){
+                    pthread_mutex_lock(&locks[0]);
+
                     burst->processorId = 1;
+
                     insert(&heads[0], burst);
+
                     headsLengths[0] = headsLengths[0] + 1;
+
+                    pthread_mutex_unlock(&locks[0]);
                 }
                 else {
+                    for (int i = 0; i < N; ++i)
+                        pthread_mutex_lock(&locks[i]);
                     if (strcmp(QS, "RM")){
                         burst->processorId = (countRR % N) + 1;
+
                         insert(&heads[countRR % N], burst);
+
                         countRR++;
                     }
                     else {
@@ -582,13 +606,17 @@ int main(int argc, char *argv[])
                         insert(&heads[minIndex], burst);
                         headsLengths[minIndex] = headsLengths[minIndex] + 1;
                     }
+                    for (int i = 0; i < N; ++i)
+                        pthread_mutex_unlock(&locks[i]);
                 }
                 usleep(xT);
             }
         }
     }
-    
+
     if (SAP == 'S'){
+        pthread_mutex_lock(&locks[0]);
+
         struct node *dummyItem = (struct node*) malloc(sizeof(struct node));
         (&dummyItem->data)->pid = -1;
         struct node *currentNode;
@@ -609,8 +637,11 @@ int main(int argc, char *argv[])
             dummyItem->next = NULL;
             dummyItem->prev = NULL;
         }
+        pthread_mutex_unlock(&locks[0]);
     }
     else{
+        for (int j = 0; j < N; ++j)
+            pthread_mutex_lock(&locks[j]);
         for (int i = 0; i < N; i++)
         {
             struct node *dummyItem = (struct node*) malloc(sizeof(struct node));
@@ -640,16 +671,11 @@ int main(int argc, char *argv[])
                     dummyItem->next = NULL;
                     dummyItem->prev = NULL;
                 }
-            }
+            }    
         }
+        for (int j = 0; j < N; ++j)
+            pthread_mutex_unlock(&locks[j]);
     }
-
-    if (SAP =='M'){
-        for (int i = 0; i < N; ++i)
-            pthread_mutex_unlock(&locks[i]);
-    }
-    else
-        pthread_mutex_unlock(&locks[0]);
 
     for (int i = 0; i < N; ++i) {
 	    ret = pthread_join(tids[i], (void **)&retmsg);
