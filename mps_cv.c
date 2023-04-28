@@ -339,6 +339,7 @@ int main(int argc, char *argv[])
     char OUTFILE[10] = "out.txt";
     int OUTMODE = 1;
     int randS[6] = {200, 10, 1000, 100, 10, 500};
+    int PC = 10;
 
     bool infileMode = false;
     list = NULL;
@@ -394,6 +395,8 @@ int main(int argc, char *argv[])
                 i++;
                 randS[j] = atoi(argv[i]);
             }
+            i++;
+            PC = atoi(argv[i]);
             infileMode = false;
         }
     }
@@ -563,7 +566,7 @@ int main(int argc, char *argv[])
     else{
         int count = 0;
 
-        while(count < 6){
+        while(count < PC){
             double lambdaT = 1.0 / randS[0];
             double uT = ((double)rand()) / RAND_MAX;
             double xT = ((-1) * log(1 - uT)) / lambdaT;
